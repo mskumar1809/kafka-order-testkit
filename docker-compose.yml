@@ -1,0 +1,89 @@
+# Local stack for manual runs and the k6 load test. Credentials are throwaway local-dev defaults.
+name: kafka-order-testkit
+
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1  # same image as the Testcontainers suite
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk  # any base64 16-byte id; fixed for a single local node
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller  # single-node KRaft, no ZooKeeper
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  # One-shot: create topics explicitly (3 partitions) rather than relying on auto-create.
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    depends_on:
+      kafka: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for t in orders.new orders.accepted orders.rejected orders.dlq positions; do
+          kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic $$t --partitions 3 --replication-factor 1
+        done
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: orders
+      POSTGRES_DB: orders
+    volumes:
+      - ./order-service/sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "orders"]
+      interval: 2s
+      retries: 30
+
+  api:
+    build: { context: ., dockerfile: order-service/Dockerfile }
+    environment: &service-env
+      KAFKA_BOOTSTRAP: kafka:9092
+      DATABASE_URL: postgresql://orders:orders@postgres:5432/orders
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 2s
+      retries: 30
+
+  processor:
+    build: { context: ., dockerfile: order-service/Dockerfile }
+    command: ["python", "-m", "order_service.processor"]
+    environment: *service-env
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+    restart: on-failure  # infrastructure errors exit without committing; restart retries the message
+
+  # Load generator, only started by `make perf` (profile "perf").
+  k6:
+    image: grafana/k6:2.3.0
+    profiles: ["perf"]
+    command: ["run", "--quiet", "/scripts/order_load.ts"]
+    environment:
+      BASE_URL: http://api:8000
+      RATE: ${RATE:-1000}
+      DURATION: ${DURATION:-60s}
+      P99_MS: ${P99_MS:-25}
+    volumes:
+      - ./perf:/scripts:ro
+    depends_on:
+      api: { condition: service_healthy }

@@ -1,0 +1,39 @@
+[project]
+name = "order-service"
+version = "0.1.0"
+description = "Order-entry API and order-processor worker for the kafka-order-testkit demo"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "confluent-kafka>=2.5",
+    "psycopg[binary]>=3.2",
+    "jsonschema>=4.23",
+    "rfc3339-validator>=0.1.4",  # enables "format": "date-time" checks in jsonschema
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx2>=2.16",  # transport for fastapi.testclient
+    "testcontainers[kafka,postgres]>=4.15",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["order_service"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+log_level = "INFO"
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]

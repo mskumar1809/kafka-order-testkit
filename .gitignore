@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Java / Maven
+target/
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+# Local env files (never commit secrets)
+.env

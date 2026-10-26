@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orderkit.example/contracts/order-accepted.schema.json",
+  "title": "OrderAccepted",
+  "$comment": "Value of messages on topic orders.accepted. Producer: order-service processor (Python). Consumer: streams-positions (Java). Both test suites validate against this file. additionalProperties=false so any new field is a deliberate, reviewed contract change.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "client_order_id", "account", "symbol", "side", "qty", "price", "ts", "status", "notional", "processed_at"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "client_order_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "account": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "symbol": { "type": "string", "minLength": 1, "maxLength": 16 },
+    "side": { "enum": ["BUY", "SELL"] },
+    "qty": { "type": "integer", "exclusiveMinimum": 0 },
+    "price": { "type": "number", "exclusiveMinimum": 0 },
+    "ts": { "type": "string", "format": "date-time" },
+    "status": { "const": "ACCEPTED" },
+    "notional": { "type": "number", "exclusiveMinimum": 0 },
+    "processed_at": { "type": "string", "format": "date-time" }
+  }
+}

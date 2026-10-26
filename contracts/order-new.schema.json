@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orderkit.example/contracts/order-new.schema.json",
+  "title": "OrderNew",
+  "$comment": "Body of POST /orders and value of messages on topic orders.new. order_id is client-generated so a client retry of the same order is idempotent end to end.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order_id", "client_order_id", "account", "symbol", "side", "qty", "price", "ts"],
+  "properties": {
+    "order_id": { "type": "string", "format": "uuid" },
+    "client_order_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "account": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "symbol": { "type": "string", "minLength": 1, "maxLength": 16 },
+    "side": { "enum": ["BUY", "SELL"] },
+    "qty": { "type": "integer", "exclusiveMinimum": 0 },
+    "price": { "type": "number", "exclusiveMinimum": 0 },
+    "ts": { "type": "string", "format": "date-time" }
+  }
+}
